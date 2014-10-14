@@ -10,9 +10,14 @@ using System.Data.OleDb;
 using QuickGraph;
 using QuickGraph.Algorithms.ShortestPath;
 using System.IO;
+using QuickGraph.Graphviz;
+using QuickGraph.Graphviz.Dot;
+using System.Collections;
+using System.Diagnostics;
 
 namespace RADFE
-{
+{    
+
     public partial class Form1 : Form
     {
         public System.Data.OleDb.OleDbConnection conn;
@@ -30,7 +35,9 @@ namespace RADFE
         public int DDheadway;
 
         BidirectionalGraph<int, TaggedEdge<int, int>> graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
-                    
+        BidirectionalGraph<int, TaggedEdge<int, int>> sp_graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
+           
+ 
         public Form1()
         {
             InitializeComponent();
@@ -69,7 +76,7 @@ namespace RADFE
             {
                 this.AAheadway = 10;
                 this.DDheadway = 10;
-                this.Dwell = 5;
+                this.Dwell = 2;
                 this.ADheadway = 10;
             }
 
@@ -277,6 +284,18 @@ namespace RADFE
 
             reader.Close();
 
+            cmd.CommandText= "SELECT * FROM LineName";
+                
+            reader = cmd.ExecuteReader();
+
+            this.RAN.linename.Clear();
+            while (reader.Read())
+            {;
+                this.RAN.linename.Add(reader.GetString(1));
+            }
+
+            reader.Close();
+
             //read events
             for (int i = 1; i < 100; i++)
             {
@@ -367,7 +386,15 @@ namespace RADFE
 
             Showdependent();
 
+            ShowGraph();
+        }
 
+        /// <summary>
+        /// use graphviz to show the graph
+        /// </summary>
+        private void ShowGraph()
+        {
+            
         }
 
         private void Showdependent()
@@ -522,7 +549,7 @@ namespace RADFE
             //add periodical events
             //*************************************
             int count = this.RAN.eventlines.Count;
-            int additional = 1;
+            int additional = 0;
             for (int index = 0; index < additional; index++)
             {
                 for (int i = 0; i < count; i++)
@@ -668,13 +695,16 @@ namespace RADFE
 
                         //dewell constraint
                         if (compareitem.arrival == true && compareitem.lineno == temp.lineno && compareitem.stationid == temp.stationid)
-                        {
-                            
+                        {                            
                             temp.selfdependencyid.Add(j);
                             st = temp.relativetime - compareitem.relativetime;
                             buff = st - Dwell;
                             //let dwell constraint equals to zero
                             //buff = 0;
+                            if (buff < 0)
+                            {
+                                buff = buff;
+                            }
                             temp.selfweight.Add(buff);
                         }
                         //departure headway
@@ -1837,23 +1867,41 @@ namespace RADFE
 
             for (int i = 0; i < this.RAN.eventlines.Count(); i++)
             {
+                graph.AddVertex(i);
+            }
+            this.RAN.hashtable.Clear();
+            for (int i = 0; i < this.RAN.eventlines.Count(); i++)
+            {
                 EventNode temp = this.RAN.eventlines[i];
                 for (int k = 0; k < temp.dependencyid.Count(); k++)
                 {
-                    graph.AddVerticesAndEdge(new TaggedEdge<int, int>(temp.dependencyid[k], i, temp.dependentweight[k]));
+                    if (graph.Edges.Contains(new TaggedEdge<int, int>(temp.dependencyid[k], i, temp.dependentweight[k])) == false)
+                    {
+                        TaggedEdge<int, int> newedge = new TaggedEdge<int, int>(temp.dependencyid[k], i, temp.dependentweight[k]);
+                        graph.AddEdge(newedge);
+                        RAN.hashtable.Add(newedge.ToString(),newedge.Tag);
+                    }
                 }
                 for (int k = 0; k < temp.selfdependencyid.Count(); k++)
                 {
-                    graph.AddVerticesAndEdge(new TaggedEdge<int, int>(temp.selfdependencyid[k], i, temp.selfweight[k]));
+                    TaggedEdge<int, int> newedge = new TaggedEdge<int, int>(temp.selfdependencyid[k], i, temp.selfweight[k]);
 
+                    graph.AddEdge(newedge);
+                    RAN.hashtable.Add(newedge.ToString(), newedge.Tag);
                 }
             }
+
+            Visualizer.copy_RAN = this.RAN;
+            RandColor();
+            Visualizer.Visualize(graph, "dependency");
+            Process photoViewer = new Process();
+            Process.Start(@"c:\\temp\\dependency.jpg");
 
             FloydWarshallAllShortestPathAlgorithm<int, TaggedEdge<int, int>> alg = new FloydWarshallAllShortestPathAlgorithm<int, TaggedEdge<int, int>>(graph, EdgeWeights);
             alg.Compute();
 
             //according to alg build a new graph
-
+            RAN.hashtable.Clear();
             foreach (int source in graph.Vertices)
             {
                 spnode s = new spnode();
@@ -1882,6 +1930,37 @@ namespace RADFE
                 }
 
                 this.RAN.spgraph.Add(s);
+            }
+
+            foreach(spnode node in RAN.spgraph)
+            {
+                foreach (NEdge ne in node.edges)
+                {
+                    if (ne.weight > 0)
+                    {
+                        TaggedEdge<int, int> newedge = 
+                            new TaggedEdge<int, int>(node.k, ne.id, ne.weight);
+
+                        this.sp_graph.AddVerticesAndEdge(newedge);
+                        this.RAN.hashtable.Add(newedge.ToString(),ne.weight);
+                    }
+                }
+            }
+
+            Visualizer.Visualize(sp_graph, "global");
+           // Process.Start(@"c:\\temp\\global.jpg");
+        }
+
+        private void RandColor()
+        {
+            Visualizer.colors.Clear();
+            Random rnd = new Random();
+            Byte[] b = new Byte[4];
+            foreach(List<LineNode> temp in this.RAN.lines)
+            {
+                rnd.NextBytes(b);
+                GraphvizColor graphcolor = new GraphvizColor();
+                Visualizer.colors.Add(new GraphvizColor(b[0], b[1], b[2], b[3]));
             }
         }
 
@@ -2248,8 +2327,12 @@ namespace RADFE
         public List<int> stations = new List<int>();
         public Event events = new Event();
         public List<List<LineNode>> lines = new List<List<LineNode>>();
+        public List<string> linename = new List<string>();
         public List<EventNode> eventlines = new List<EventNode>();  
         public List<spnode> spgraph = new List<spnode>();
+        //weight of link in the dependence graph
+        public List<int> Weights = new List<int>();
+        public Hashtable hashtable = new Hashtable();
     }
 
     public class spnode
