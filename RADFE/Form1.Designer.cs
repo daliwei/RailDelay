@@ -40,6 +40,8 @@
             this.calToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.shortestPathCalculationToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.testVToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.testVToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.simulationToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.listView1 = new System.Windows.Forms.ListView();
             this.Notices = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.listView2 = new System.Windows.Forms.ListView();
@@ -48,7 +50,10 @@
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.listView4 = new System.Windows.Forms.ListView();
             this.columnHeader3 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            this.testVToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.button1 = new System.Windows.Forms.Button();
+            this.button2 = new System.Windows.Forms.Button();
+            this.listView5 = new System.Windows.Forms.ListView();
+            this.columnHeader4 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.menuStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -126,7 +131,8 @@
             this.calToolStripMenuItem,
             this.shortestPathCalculationToolStripMenuItem,
             this.testVToolStripMenuItem,
-            this.testVToolStripMenuItem1});
+            this.testVToolStripMenuItem1,
+            this.simulationToolStripMenuItem});
             this.calculateToolStripMenuItem.Name = "calculateToolStripMenuItem";
             this.calculateToolStripMenuItem.Size = new System.Drawing.Size(68, 20);
             this.calculateToolStripMenuItem.Text = "Calculate";
@@ -152,17 +158,31 @@
             this.testVToolStripMenuItem.Text = "Test I";
             this.testVToolStripMenuItem.Click += new System.EventHandler(this.testVToolStripMenuItem_Click);
             // 
+            // testVToolStripMenuItem1
+            // 
+            this.testVToolStripMenuItem1.Name = "testVToolStripMenuItem1";
+            this.testVToolStripMenuItem1.Size = new System.Drawing.Size(207, 22);
+            this.testVToolStripMenuItem1.Text = "Test V";
+            this.testVToolStripMenuItem1.Click += new System.EventHandler(this.testVToolStripMenuItem1_Click);
+            // 
+            // simulationToolStripMenuItem
+            // 
+            this.simulationToolStripMenuItem.Name = "simulationToolStripMenuItem";
+            this.simulationToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
+            this.simulationToolStripMenuItem.Text = "Simulation";
+            this.simulationToolStripMenuItem.Click += new System.EventHandler(this.simulationToolStripMenuItem_Click);
+            // 
             // listView1
             // 
-            this.listView1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                        | System.Windows.Forms.AnchorStyles.Left)));
+            this.listView1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left)));
             this.listView1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.Notices});
             this.listView1.FullRowSelect = true;
             this.listView1.GridLines = true;
-            this.listView1.Location = new System.Drawing.Point(21, 24);
+            this.listView1.Location = new System.Drawing.Point(21, 44);
             this.listView1.Name = "listView1";
-            this.listView1.Size = new System.Drawing.Size(435, 153);
+            this.listView1.Size = new System.Drawing.Size(435, 133);
             this.listView1.TabIndex = 1;
             this.listView1.UseCompatibleStateImageBehavior = false;
             this.listView1.View = System.Windows.Forms.View.Details;
@@ -174,16 +194,15 @@
             // 
             // listView2
             // 
-            this.listView2.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                        | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.listView2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left)));
             this.listView2.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1});
             this.listView2.FullRowSelect = true;
             this.listView2.GridLines = true;
-            this.listView2.Location = new System.Drawing.Point(487, 24);
+            this.listView2.Location = new System.Drawing.Point(487, 44);
             this.listView2.Name = "listView2";
-            this.listView2.Size = new System.Drawing.Size(310, 396);
+            this.listView2.Size = new System.Drawing.Size(383, 133);
             this.listView2.TabIndex = 2;
             this.listView2.UseCompatibleStateImageBehavior = false;
             this.listView2.View = System.Windows.Forms.View.Details;
@@ -195,16 +214,16 @@
             // 
             // listView3
             // 
-            this.listView3.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                        | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.listView3.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.listView3.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader2});
             this.listView3.FullRowSelect = true;
             this.listView3.GridLines = true;
-            this.listView3.Location = new System.Drawing.Point(945, 24);
+            this.listView3.Location = new System.Drawing.Point(901, 44);
             this.listView3.Name = "listView3";
-            this.listView3.Size = new System.Drawing.Size(197, 396);
+            this.listView3.Size = new System.Drawing.Size(241, 376);
             this.listView3.TabIndex = 3;
             this.listView3.UseCompatibleStateImageBehavior = false;
             this.listView3.View = System.Windows.Forms.View.Details;
@@ -233,12 +252,44 @@
             this.columnHeader3.Text = "Event Info";
             this.columnHeader3.Width = 425;
             // 
-            // testVToolStripMenuItem1
+            // button1
             // 
-            this.testVToolStripMenuItem1.Name = "testVToolStripMenuItem1";
-            this.testVToolStripMenuItem1.Size = new System.Drawing.Size(207, 22);
-            this.testVToolStripMenuItem1.Text = "Test V";
-            this.testVToolStripMenuItem1.Click += new System.EventHandler(this.testVToolStripMenuItem1_Click);
+            this.button1.Location = new System.Drawing.Point(214, 10);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(121, 23);
+            this.button1.TabIndex = 5;
+            this.button1.Text = "Simulate w/o events";
+            this.button1.UseVisualStyleBackColor = true;
+            this.button1.Click += new System.EventHandler(this.button1_Click);
+            // 
+            // button2
+            // 
+            this.button2.Location = new System.Drawing.Point(357, 10);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(121, 23);
+            this.button2.TabIndex = 6;
+            this.button2.Text = "Simulate with events";
+            this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
+            // 
+            // listView5
+            // 
+            this.listView5.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.listView5.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
+            this.columnHeader4});
+            this.listView5.FullRowSelect = true;
+            this.listView5.GridLines = true;
+            this.listView5.Location = new System.Drawing.Point(487, 196);
+            this.listView5.Name = "listView5";
+            this.listView5.Size = new System.Drawing.Size(383, 212);
+            this.listView5.TabIndex = 7;
+            this.listView5.UseCompatibleStateImageBehavior = false;
+            this.listView5.View = System.Windows.Forms.View.Details;
+            // 
+            // columnHeader4
+            // 
+            this.columnHeader4.Text = "Link Hazards Info";
+            this.columnHeader4.Width = 1000;
             // 
             // Form1
             // 
@@ -246,6 +297,9 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.AutoScroll = true;
             this.ClientSize = new System.Drawing.Size(1154, 420);
+            this.Controls.Add(this.listView5);
+            this.Controls.Add(this.button2);
+            this.Controls.Add(this.button1);
             this.Controls.Add(this.listView4);
             this.Controls.Add(this.listView3);
             this.Controls.Add(this.listView2);
@@ -287,6 +341,11 @@
         private System.Windows.Forms.ColumnHeader columnHeader3;
         private System.Windows.Forms.ToolStripMenuItem testVToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem testVToolStripMenuItem1;
+        private System.Windows.Forms.ToolStripMenuItem simulationToolStripMenuItem;
+        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.ListView listView5;
+        private System.Windows.Forms.ColumnHeader columnHeader4;
     }
 }
 

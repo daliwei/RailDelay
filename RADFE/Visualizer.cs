@@ -75,12 +75,14 @@ namespace RADFE
             EventNode temp = Visualizer.copy_RAN.eventlines[System.Convert.ToInt32(p)];
             if (temp.arrival == true)
             {
-                return ("Arrival_" + copy_RAN.linename[temp.lineno-1] + "_St_" + temp.stationid.ToString()
+                return ("Arrival_" + copy_RAN.linename[temp.lineno-1] + "_St_" + 
+                    copy_RAN.Stations[temp.stationid-1].name
                     + "_Cycle_" + temp.cycleNo);
             }
             else
             {
-                return ("Departure_" + copy_RAN.linename[temp.lineno - 1] + "_St_" + temp.stationid.ToString()
+                return ("Departure_" + copy_RAN.linename[temp.lineno - 1] + "_St_" +
+                    copy_RAN.Stations[temp.stationid-1].name
                     + "_Cycle_" + temp.cycleNo);
             }
         }

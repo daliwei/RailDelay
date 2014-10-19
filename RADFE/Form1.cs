@@ -14,6 +14,7 @@ using QuickGraph.Graphviz;
 using QuickGraph.Graphviz.Dot;
 using System.Collections;
 using System.Diagnostics;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace RADFE
 {    
@@ -34,10 +35,13 @@ namespace RADFE
         public int Dwell;
         public int DDheadway;
 
+        public int check = 0;
+
         BidirectionalGraph<int, TaggedEdge<int, int>> graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
         BidirectionalGraph<int, TaggedEdge<int, int>> sp_graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
-           
- 
+        private List<Train> Trains = new List<Train>();
+
+        List<List<EventNode>> templist_event = new List<List<EventNode>>();
         public Form1()
         {
             InitializeComponent();
@@ -46,7 +50,8 @@ namespace RADFE
 
             if (f.ShowDialog() == DialogResult.OK)
             {
-                Intial(f.getradio());
+                check = f.getradio();
+                Intial(check);
             }
             else
             {
@@ -57,24 +62,38 @@ namespace RADFE
 
         private void Intial(int check)
         {
+            ClearVariables();
+
             ConnectDB(check);
-
             RefTime = DateTime.Today;
-
             InitialContraints(check);
-
             ReadIntialMap();
             this.Mapname = "Map1";
-            LoadMap("Map1");
+            LoadMap("Map1");            
+        }
 
-            
+        /// <summary>
+        /// clear all the variables
+        /// </summary>
+        private void ClearVariables()
+        {
+            this.RAN = new RAnetwork();
+            graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
+            sp_graph = new BidirectionalGraph<int, TaggedEdge<int, int>>(true);
+            Trains.Clear();
+
+            this.listView1.Items.Clear();
+            this.listView2.Items.Clear();
+            this.listView3.Items.Clear();
+            this.listView4.Items.Clear();
+            this.listView5.Items.Clear();
         }
 
         private void InitialContraints(int check)
         {
             if (check == 1)
             {
-                this.AAheadway = 10;
+                this.AAheadway = 30;
                 this.DDheadway = 10;
                 this.Dwell = 2;
                 this.ADheadway = 10;
@@ -198,20 +217,17 @@ namespace RADFE
             OleDbCommand cmd = new OleDbCommand(sql, conn);
             
             //read railway lines
+            templist_event.Clear();
             for (int i = 1; i < 100; i++)
             {
+                //read routes
                 cmd.CommandText = "SELECT * FROM "+ linename +" where LineNo="+System.Convert.ToString(i)+" order by Sq ASC";
-                       
-                
                 reader = cmd.ExecuteReader();
-
                 List<LineNode> templist = new List<LineNode>();
-
                 int j = 0;
-           
+                List<EventNode> tempevents = new List<EventNode>();
                 while (reader.Read())
-                {
-                    
+                {                    
 
                     LineNode node = new LineNode();
                     node.lineid = i;
@@ -219,17 +235,13 @@ namespace RADFE
                     node.tono = reader.GetInt32(3);
                     node.speedlimit = reader.GetInt32(5);
                     node.sectionno = reader.GetInt32(4);
+                    //set node section no
+                    node.sectionno = node.fromno * 10 + node.tono;
                     node.travetime = reader.GetInt32(8);
                     node.at = reader.GetDateTime(6);
                     node.dt = reader.GetDateTime(7);
                     node.length = reader.GetInt32(10);
                     templist.Add(node);
-
-                    
-                    if (RefTime > node.dt)
-                    {
-                        RefTime = node.dt;
-                    }
                     
                     //departure event
                     EventNode enode = new EventNode();
@@ -241,6 +253,9 @@ namespace RADFE
                     enode.st = node.dt;                    
                     this.RAN.eventlines.Add(enode);
                     enode.aevent = this.RAN.eventlines.Count;
+                    tempevents.Add(enode);
+                    if (node.sectionno == 48)
+                        node = node;
 
                     //arrival event
                     EventNode enodd = new EventNode();
@@ -254,11 +269,7 @@ namespace RADFE
                     enodd.length = node.length;
                     enodd.devent = this.RAN.eventlines.Count-1;
                     this.RAN.eventlines.Add(enodd);
-                    
-                    if (enodd.lineno == 1)
-                    {
-                        int tony = 0;
-                    }
+                    tempevents.Add(enodd);
                     
                     j = j + 1;
                 }
@@ -269,10 +280,24 @@ namespace RADFE
                     break;
 
                 this.RAN.lines.Add(templist);
+                templist_event.Add(tempevents);
                 
             }
 
-            //read stations
+            //first method set the reference time as 12:00 am
+            RefTime = new DateTime(templist_event[0][0].st.Year,templist_event[0][0].st.Month,templist_event[0][0].st.Day);
+            //or set the reference as the earliest departure event of all the routes
+            RefTime = DateTime.MaxValue;
+            foreach(List<LineNode> templist in RAN.lines)
+            {
+                if (templist[0].dt < RefTime)
+                {
+                    RefTime = templist[0].dt;
+                }
+            }           
+            
+
+            //read stations (the station number is from 1)
             cmd.CommandText= "SELECT * FROM " + Stationname;
                 
             reader = cmd.ExecuteReader();
@@ -280,32 +305,85 @@ namespace RADFE
             while (reader.Read())
             {;
                 this.RAN.stations.Add(reader.GetInt32(1));
+                Station s = new Station();
+                s.id = reader.GetInt32(1);
+                s.name = reader.GetString(2);
+                this.RAN.Stations.Add(s);
+            }
+
+            //from stations, build links (link id: fromno*10+tonumber)
+            int index = 0;
+            for(int i=0;i<this.RAN.stations.Count;i++)
+            {
+                for (int j = i+1; j < this.RAN.stations.Count; j++)
+                {
+                    Link link = new Link();
+                    link.fromstation = i+1;
+                    link.tostation = j+1;
+                    link.id = (i + 1) * 10 + (j + 1);
+                    this.RAN.Links.Add(link);
+                    if (this.RAN.hashtable_link.ContainsKey(link.id) == false)
+                    {
+                        this.RAN.hashtable_link.Add(link.id, index);
+                    }
+                    for(int k=0;k<RAN.lines.Count;k++)
+                    {
+                        foreach(LineNode LN in RAN.lines[k])
+                        {
+                            if (LN.fromno == i+1 && LN.tono == j+1)
+                            {
+                                LN.linkid = (i+1)*10+(j+1);
+                                //add into the hashtable
+                                
+                            }
+                        }
+                    }
+                    index++;
+
+                    //reverse direction
+                    link = new Link();
+                    link.fromstation = j + 1;
+                    link.tostation = i + 1;
+                    link.id = (j + 1) * 10 + (i + 1);
+                    this.RAN.Links.Add(link);
+                    //add into the hash-table
+                    if (this.RAN.hashtable_link.ContainsKey(link.id) == false)
+                    {
+                        this.RAN.hashtable_link.Add(link.id, index);
+                    }
+                    for (int k = 0; k < RAN.lines.Count; k++)
+                    {
+                        foreach (LineNode LN in RAN.lines[k])
+                        {
+                            if (LN.fromno == j + 1 && LN.tono == i + 1)
+                            {
+                                LN.linkid = (j + 1) * 10 + (i + 1);
+                                
+                            }
+                        }
+                    }
+                    index++;
+                }
             }
 
             reader.Close();
 
-            cmd.CommandText= "SELECT * FROM LineName";
-                
+            //read route names
+            cmd.CommandText= "SELECT * FROM LineName";                
             reader = cmd.ExecuteReader();
-
             this.RAN.linename.Clear();
             while (reader.Read())
             {;
                 this.RAN.linename.Add(reader.GetString(1));
             }
-
             reader.Close();
 
             //read events
             for (int i = 1; i < 100; i++)
             {
                 cmd.CommandText = "SELECT * FROM " + Eventname + " where StageNo=" + System.Convert.ToString(i);
-
-
                 reader = cmd.ExecuteReader();
-
                 int j = 0;
-
                 while (reader.Read())
                 {
                     interval node = new interval();
@@ -316,25 +394,8 @@ namespace RADFE
                     TimeSpan tempsp = new TimeSpan();
                     tempsp = node.st - RefTime;
                     node.relativest = (int)tempsp.TotalMinutes;
-                    //if (tempsp.TotalMinutes < 0)
-                    //{
-                    //    if (tempsp.TotalMinutes < -720)
-                    //    {
-                    //        node.relativest = 1440 + (int)(tempsp.TotalMinutes);
-                    //    }
-                    //    else
-                    //    {
-                    //        node.relativest = -(int)(tempsp.TotalMinutes);
-                    //    }
-                    //}
-                    //else
-                    //{
-                    //    node.relativest =(int) tempsp.TotalMinutes;
-                    //}
 
                     node.relativeet = node.relativest + node.last;
-                        
-
                     this.RAN.events.intervals.Add(node);
                     this.RAN.events.stageno.Add(reader.GetInt32(3));
 
@@ -344,7 +405,6 @@ namespace RADFE
                     temp2 = reader.GetString(4);
 
                     List<Section> single = new List<Section>();
-
                     while (tempstring.IndexOf(";") >= 0 && temp2.IndexOf(";")>=0)
                     {
                         Section news = new Section();
@@ -358,12 +418,27 @@ namespace RADFE
                         temp2 = temp2.Substring(temp2.IndexOf(";") + 1);
 
                         single.Add(news);
+
+                        AddHazard2Link(news,node.st,node.et);
                     }
 
                     Section newitem = new Section();
                     newitem.sectionid = System.Convert.ToInt32(tempstring);
                     newitem.intensity = System.Convert.ToInt32(temp2);
                     single.Add(newitem);
+                    AddHazard2Link(newitem, node.st, node.et);
+
+                    //for each event add the affected link for the reverse direction
+                    int sectioncout = single.Count;
+                    for (int sectionindex = 0; sectionindex < sectioncout; sectionindex++)
+                    {
+                        Section s = single[sectionindex];
+                        Section news = new Section();
+                        news.intensity = s.intensity;
+                        news.sectionid = (s.sectionid % 10) * 10 + s.sectionid / 10;
+                        single.Add(news);
+                        AddHazard2Link(news, node.st, node.et);
+                    }
 
                     this.RAN.events.sections.Add(single);
 
@@ -382,19 +457,285 @@ namespace RADFE
             this.listView1.Items.Add("Line # " + this.RAN.lines.Count.ToString());
             this.listView1.Items.Add("Event stages # " + this.RAN.events.stageno.Count.ToString());
 
+            //add trains for cycle 0
+            int route_index = 1;
+            int additional =1;
+            foreach (List<LineNode> templist in RAN.lines)
+            {
+                for (int i = 0; i <= additional; i++)
+                {
+                    AddTrain(templist, i, route_index, templist_event[route_index - 1]);
+                }
+
+                route_index++;
+            }
+
+            //according to the train add event
+            this.RAN.eventlines.Clear();
+            foreach(Train train in this.Trains)
+            {
+                this.RAN.eventlines.AddRange(train.schedule);
+            }
+
+            //Write the routes
+            writeroutes();
+
+            writehazards();
+
             buildeventgraph();
 
             Showdependent();
 
-            ShowGraph();
+            //ShowGraph();
         }
 
         /// <summary>
-        /// use graphviz to show the graph
+        /// write hazardous events
         /// </summary>
-        private void ShowGraph()
+        private void writehazards()
         {
-            
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\Hazards.txt");
+            for(int i=0;i<RAN.events.sections.Count;i++)
+            { 
+                List<Section> sections = RAN.events.sections[i];
+                interval inter = RAN.events.intervals[i];
+                string line = "Event "+i.ToString()+" from " + inter.st.ToString() + " to " + inter.et.ToString();
+                file.WriteLine(line);
+                for(int j=0;j<sections.Count;j++)
+                {
+                    Section s = sections[j];
+                    int lid = (int)this.RAN.hashtable_link[s.sectionid];
+                    string from = this.RAN.Stations[this.RAN.Links[lid].fromstation - 1].name;
+                    string to = this.RAN.Stations[this.RAN.Links[lid].tostation - 1].name;
+                    line = "       Link: " + s.sectionid.ToString() + " from " + from + " to " + to 
+                        + "and Intensity: "
+                        + s.intensity.ToString() + " Reduced speed " + this.ReduceSpeed(s.intensity).ToString();
+                    file.WriteLine(line);
+                }
+            }
+            file.Close();
+        }
+
+        /// <summary>
+        /// write routes of trains
+        /// </summary>
+        private void writeroutes()
+        {
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\Routes.txt");
+            foreach(Train train in this.Trains)
+            {
+                 string line  = "Route "+train.routeid.ToString()+"_Cycle_"+train.cycle.ToString();
+                 file.WriteLine(line);
+                foreach(EventNode en in train.schedule)
+                {
+                    if (en.arrival == true)
+                    {
+                        line = "      Arrival at "+this.RAN.Stations[en.stationid-1].name+" at time "+en.st.ToString();
+                    }
+                    else
+                    {
+                        line = "      Departure at " + this.RAN.Stations[en.stationid - 1].name + " at time " + en.st.ToString();
+                    }
+                    file.WriteLine(line);
+                }
+            }
+            file.Close();
+        }
+
+        //add hazards to link
+        private void AddHazard2Link(Section news,DateTime st, DateTime et)
+        {
+            foreach(Link lk in this.RAN.Links)
+            {
+                if (lk.id == news.sectionid)
+                {
+                    Hazard hazard = new Hazard();
+                    hazard.startime = st;
+                    hazard.endtime = et;
+                    hazard.intensity = news.intensity;
+                    lk.Link_hazards.Add(hazard);
+                    
+                    //update list view
+                    TimeSpan sp = new TimeSpan();
+                    sp = st-this.RefTime;
+                    int refstart = (int) sp.TotalMinutes;
+
+                    sp = et - this.RefTime;
+                    int refend = (int) sp.TotalMinutes;
+
+                    string item = "Link_" + lk.id.ToString() + "_intensity_" + hazard.intensity.ToString() +
+                        "_from_" + refstart.ToString() + "_end_" + refend.ToString();
+                    this.listView5.Items.Add(item);
+
+                    break;
+                }
+            }
+        }
+
+        private void AddTrain(List<LineNode> route,int cycle,int routeid,List<EventNode> schedule)
+        {
+            //when add a train, there may be a partial train and full train
+
+            // add a full train
+            Train train = new Train();
+            train.cycle = cycle;
+            train.route = this.DeepCopy(route);
+            //default initialization
+            train.destination = route[route.Count - 1].tono;
+            train.fromstation = route[0].fromno;
+            train.location = 0;
+            train.onstation = route[0].fromno;
+            train.speed = (double)route[0].length / (double)((double)route[0].travetime / 60);
+            train.tostation = route[0].tono;
+            train.routeid = routeid;
+            train.schedule = this.DeepCopy(schedule);
+            train.act_times = this.DeepCopy(schedule);
+
+            //change the arrival and departure events that are in the second day
+            for (int i = 1; i <train.route.Count; i++)
+            {
+                if ((train.route[i].dt - train.route[0].dt).TotalMinutes <= 0)
+                {
+                    train.route[i].dt = train.route[i].dt.AddDays(1);
+                }
+                if ((train.route[i].at - train.route[0].dt).TotalMinutes <= 0)
+                {
+                    train.route[i].at = train.route[i].at.AddDays(1);
+                }
+            }
+            //now for schedules
+            for (int i = 1; i <train.schedule.Count; i++)
+            {
+                if ((train.schedule[i].st - train.schedule[0].st).TotalMinutes <= 0)
+                {
+                    train.schedule[i].st = train.schedule[i].st.AddDays(1);
+                }
+            }
+            for (int i = 0; i < train.route.Count; i++)
+            {
+                train.route[i].at = train.route[i].at.AddDays(cycle);
+                train.route[i].dt = train.route[i].dt.AddDays(cycle);
+            }
+            for (int i = 0; i < train.schedule.Count; i++)
+            {
+               train.schedule[i].st = train.schedule[i].st.AddDays(cycle);
+               train.schedule[i].cycleNo = cycle;
+            }
+            this.Trains.Add(train);
+            if (cycle > 0)
+                return;
+            //now add the partial train if necessary
+            int index=0;
+            int min_interval=100000000;
+            //find the event that are closest to the ref time
+            bool arrival = false;
+            for (int i = 0; i < route.Count;i++ )
+            {
+                if ((route[i].dt - this.RefTime).TotalMinutes < min_interval && (route[i].dt - this.RefTime).TotalMinutes>=0)
+                {
+                    min_interval = (int)(route[i].dt - this.RefTime).TotalMinutes;
+                    index = i;
+                    arrival = false;
+                }
+                if ((route[i].at - this.RefTime).TotalMinutes < min_interval && (route[i].at - this.RefTime).TotalMinutes > 0)
+                {
+                    min_interval = (int)(route[i].at - this.RefTime).TotalMinutes;
+                    index = i;
+                    arrival = true;
+                }
+            }
+            if (index == 0 && arrival == false)
+                //no partial route
+                return;
+            else
+            {
+                Train train1 = new Train();
+                train1.cycle = -1; //partial train's cycle index is -1
+                train1.route = this.DeepCopy(route);
+                //default initialization
+                train1.destination = route[route.Count - 1].tono;
+                train1.fromstation = route[0].fromno;
+                train1.onstation = route[0].fromno;
+                train1.tostation = route[0].tono;
+                train1.routeid = routeid;
+                train1.schedule = this.DeepCopy(schedule);
+
+                //add a train that is already traveling on the link or wait in the station
+                if (arrival == true)
+                {
+                    //the train in currently in travel
+                    train1.onlink = route[index].sectionno;
+                    train1.onstation = -1;
+                    train1.cycle = -1;
+                    train1.tostation = route[index].tono;
+                    train1.fromstation = route[index].fromno;
+                    train1.speed = (double)route[index].length / (double)((double)route[index].travetime / 60);
+                    train1.station_passed = index ;
+                    train1.location = train.speed * (double)(route[index].travetime - min_interval) / 60;
+
+                    //set the arrival or departure before index minus one day
+                    for (int i = 0; i <= index; i++)
+                    {
+                        if (i>0&&(train1.route[i - 1].at.AddDays(1) - train1.route[i].dt).TotalMinutes > 0)
+                        {
+                            break;
+                        }
+                        if ((train1.route[i].at - train1.route[i].dt).TotalMinutes > 0)
+                        {                            
+                            train1.route[i].at = train1.route[i].at.AddDays(-1);
+                            train1.schedule[i*2+1].st = train1.schedule[i*2+1].st.AddDays(-1);
+                            train1.route[i].dt = train1.route[i].dt.AddDays(-1);                            
+                            train1.schedule[i*2].st = train1.schedule[i*2].st.AddDays(-1);
+                        }
+                        else
+                        {
+                            train1.route[i].dt = train1.route[i].dt.AddDays(-1);
+                            train1.schedule[i * 2].st = train1.schedule[i * 2].st.AddDays(-1);
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    //the train is currently wait in the station
+                    train1.speed = 0;
+                    train1.onstation = route[index].fromno;
+                    train1.onlink = -1;
+                    train1.station_passed = index;
+                    train1.cycle = -1;
+
+                    //set the arrival or departure before index minus one day
+                    for (int i = 0; i <= index; i++)
+                    {
+                        if (i > 0 && (train1.route[i - 1].at.AddDays(1) - train1.route[i].dt).TotalMinutes > 0)
+                        {
+                            break;
+                        }
+                        if ((train1.route[i].at - train1.route[i].dt).TotalMinutes > 0)
+                        {
+                            train1.route[i].at = train1.route[i].at.AddDays(-1);
+                            train1.schedule[i * 2 + 1].st = train1.schedule[i * 2 + 1].st.AddDays(-1);
+                            train1.route[i].dt = train1.route[i].dt.AddDays(-1);
+                            train1.schedule[i * 2].st = train1.schedule[i * 2].st.AddDays(-1);
+                        }
+                        else
+                        {
+                            train1.route[i].dt = train1.route[i].dt.AddDays(-1);
+                            train1.schedule[i * 2].st = train1.schedule[i * 2].st.AddDays(-1);
+                            break;
+                        }
+                    }
+                }
+
+                foreach (EventNode en in train1.schedule)
+                {
+                    en.cycleNo = -1;
+                }
+                train1.act_times = this.DeepCopy(train1.schedule);
+
+                this.Trains.Add(train1);    
+            }
+               
         }
 
         private void Showdependent()
@@ -459,83 +800,35 @@ namespace RADFE
         }
 
         private void buildeventgraph()
-        {
-            //DEFINE RELATIVE TIME
-            //int templineno = 0;
-            //DateTime dt = new DateTime();
-            //int temprelative = 0;
-            //for (int i = 0; i < this.RAN.eventlines.Count(); i++)
-            //{                
-            //    if (RAN.eventlines[i].lineno != templineno)
-            //    {
-            //        templineno = RAN.eventlines[i].lineno;
-            //        TimeSpan SP = this.RAN.eventlines[i].st - RefTime;
-            //        dt = this.RAN.eventlines[i].st;
-            //        if (SP.TotalMinutes < 0)
-            //        {
-            //            this.RAN.eventlines[i].relativetime = (System.Convert.ToInt32(SP.TotalMinutes) + 60 * 24);
-            //            temprelative = this.RAN.eventlines[i].relativetime;
-            //        }
-            //        else
-            //        {
-            //            this.RAN.eventlines[i].relativetime = System.Convert.ToInt32(SP.TotalMinutes);
-            //            temprelative = this.RAN.eventlines[i].relativetime;
-            //        }
-            //    }
-            //    else
-            //    {
-            //        if (templineno == 2)
-            //        {
-            //            int tony = 0;
-            //        }
-            //        TimeSpan SP1 = this.RAN.eventlines[i].st - dt;
-            //        if (SP1.TotalMinutes > 0)
-            //        {
-            //            this.RAN.eventlines[i].relativetime = System.Convert.ToInt32(SP1.TotalMinutes);
-            //            this.RAN.eventlines[i].relativetime = temprelative + this.RAN.eventlines[i].relativetime;
-            //        }
-            //        else 
-            //        {
-            //            int timetemp = (24-dt.Hour)*60-dt.Minute;
-            //            this.RAN.eventlines[i].relativetime = (this.RAN.eventlines[i].st.Hour * 60 + this.RAN.eventlines[i].st.Minute) + timetemp + temprelative;
-
-            //            //if (SP1.TotalMinutes < -720)
-            //            //{
-            //            //    this.RAN.eventlines[i].relativetime = 60*24 + System.Convert.ToInt32(SP1.TotalMinutes);
-            //            //}
-            //            //else
-            //            //{
-            //            //    this.RAN.eventlines[i].relativetime = 0 - System.Convert.ToInt32(SP1.TotalMinutes);
-            //            //}
-            //            //this.RAN.eventlines[i].relativetime = temprelative + this.RAN.eventlines[i].relativetime;
-            //        }
-            //    }                
-            //}
-
-            int templineno = 0;
-            DateTime dt = new DateTime();
-            int temprelative = 0;
-            dt=DateTime.Now;
-            foreach (EventNode en in this.RAN.eventlines)
+        {            
+            DateTime dt = this.RefTime;
+            //in the event-line, we ignore the event that are in cycle -1 and earlier than the ref time
+            int count = this.RAN.eventlines.Count;
+            List<int> remove_index = new List<int>();
+            for (int i = 0; i < count; i++)
             {
-                if (en.st < dt)
-                {
-                    dt = en.st;
-                }
-            }
-            foreach (EventNode en in this.RAN.eventlines)
-            {
+                EventNode en = RAN.eventlines[i];
                 TimeSpan ts = en.st - dt;
                 en.relativetime = (int)(ts.TotalMinutes);
+                if (en.relativetime < 0)
+                {
+                    remove_index.Add(i);
+                }
             }
 
+            //remove those events that happen earlier than the reference time 
+            for (int i = 0; i < remove_index.Count; i++)
+            {
+                RAN.eventlines.RemoveAt(remove_index[i] - i);
+            }
+            
             //re order the list by the relative time
             for (int i = 0; i < this.RAN.eventlines.Count - 1; i++)
             {
                 this.RAN.eventlines[i].realretime = this.RAN.eventlines[i].relativetime + this.RAN.eventlines[i].delay;
                 for (int j = i + 1; j < this.RAN.eventlines.Count; j++)
                 {
-                    if (this.RAN.eventlines[i].relativetime>this.RAN.eventlines[j].relativetime)
+                    if (this.RAN.eventlines[i].relativetime > this.RAN.eventlines[j].relativetime)
                     {
                         EventNode temp = null;
                         temp = this.RAN.eventlines[i];
@@ -545,40 +838,71 @@ namespace RADFE
                 }
             }
 
-            //*************************************
-            //add periodical events
-            //*************************************
-            int count = this.RAN.eventlines.Count;
-            int additional = 0;
-            for (int index = 0; index < additional; index++)
+            writeevents();
+            
+            //set the schedule 进站顺序 和link的到达顺序for simulation
+            //for each station, set the list of arrival route (the sequence)
+            foreach(Station s  in this.RAN.Stations)
             {
-                for (int i = 0; i < count; i++)
+                s.routes = new List<int>();
+                s.cycles = new List<int>();
+                foreach(EventNode en in this.RAN.eventlines)
                 {
-                    EventNode en = new EventNode(this.RAN.eventlines[i]);                
-                    en.relativetime = this.RAN.eventlines[i].relativetime + 24 *(index+1)* 60;
-                    this.RAN.eventlines.Add(en);
-                    en.cycleNo = index + 1;
+                    if (en.arrival == true && en.stationid == s.id)
+                    {
+                        s.routes.Add(en.lineno);
+                        s.cycles.Add(en.cycleNo);
+                        s.nextroute = 0;
+                        s.cycle = 0;
+                    }
                 }
             }
+            //write
+            writestationsequence();
 
-                //*************************************
-
-                //reset the ref arrival dept index
-                for (int i = 0; i < this.RAN.eventlines.Count; i++)
+            //for line add departure sequence
+            int temp_indexer = -1;
+            foreach(Link k in this.RAN.Links)
+            {
+                temp_indexer++;
+                if (temp_indexer == 60)
                 {
-                    if (this.RAN.eventlines[i].departure == true)
+                    temp_indexer = temp_indexer;
+                }
+                k.routes = new List<int>();
+                k.cycles = new List<int>();
+                foreach (EventNode en in this.RAN.eventlines)
+                {
+                    if (en.arrival == false && k.id == en.sectionid)
                     {
-                        for (int j = i; j < this.RAN.eventlines.Count; j++)
-                        {
+                        k.routes.Add(en.lineno);
+                        k.cycles.Add(en.cycleNo);
+                        k.nextroute = 0;
+                        k.cycle = 0;
+                    }
+                }
+            }
+            writelinksequence();
 
-                            if (this.RAN.eventlines[i].lineno == this.RAN.eventlines[j].lineno && this.RAN.eventlines[j].sectionid == this.RAN.eventlines[i].sectionid && this.RAN.eventlines[j].arrival == true)
-                            {
-                                this.RAN.eventlines[i].aevent = j;
-                                this.RAN.eventlines[j].devent = i;
-                            }
+            //*************************************
+            //reset the ref arrival dept index
+            for (int i = 0; i < this.RAN.eventlines.Count; i++)
+            {
+                if (this.RAN.eventlines[i].departure == true)
+                {
+                    for (int j = i; j < this.RAN.eventlines.Count; j++)
+                    {
+                        if (this.RAN.eventlines[i].lineno == this.RAN.eventlines[j].lineno 
+                            && this.RAN.eventlines[j].sectionid == this.RAN.eventlines[i].sectionid 
+                            && this.RAN.eventlines[j].arrival == true
+                            && this.RAN.eventlines[i].cycleNo == this.RAN.eventlines[j].cycleNo)
+                        {
+                            this.RAN.eventlines[i].aevent = j;
+                            this.RAN.eventlines[j].devent = i;
                         }
                     }
                 }
+            }
 
             for (int i = 0; i < this.RAN.eventlines.Count - 1; i++)
             {
@@ -597,22 +921,13 @@ namespace RADFE
                     //if it is an arrival event, its dependency may be the departure event, the train at the platform.
                     if (temp.arrival == true)
                     {
-                        if (temp.lineno == 3 && temp.stationid == 3)
-                        {
-                            int tony = 0;
-                        }
-
                         //running time
                         if (compareitem.departure == true && compareitem.lineno == temp.lineno && compareitem.sectionid == temp.sectionid)
                         {
                             temp.selfdependencyid.Add(j);
-                            //buffer time (scheduled time-minimu time)
+                            //buffer time (scheduled time-minimum time)
                             st = temp.relativetime - compareitem.relativetime;
                             buff = st-System.Convert.ToInt32((float)temp.length *1000/ ((float)temp.speedlimit/3.6)/60);
-                            if (buff < 0)
-                            {
-                                int tony = 0;
-                            }
                             temp.selfweight.Add(buff);
                         }
                         //arrival/departure headway
@@ -623,10 +938,6 @@ namespace RADFE
                                 temp.dependencyid.Add(j);
                                 st = temp.relativetime - compareitem.relativetime;
                                 buff = st - ADheadway;
-                                if (buff < 0)
-                                {
-                                    int tony = 0;
-                                }
                                 temp.dependentweight.Add(buff);
                             }
                             else
@@ -639,10 +950,6 @@ namespace RADFE
                                         //buffer time
                                         st = temp.relativetime - compareitem.relativetime;
                                         buff = st - ADheadway;
-                                        if (buff < 0)
-                                        {
-                                            int tony = 0;
-                                        }
                                         temp.dependentweight[k]=buff;
 
                                         break;
@@ -763,6 +1070,63 @@ namespace RADFE
             }  
         }
 
+        private void writelinksequence()
+        { 
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\LinkService.txt");
+            foreach(Link k in this.RAN.Links)
+            {
+                string line;
+                line = "Link "+k.id.ToString()+"_incoming trains";
+                file.WriteLine(line);
+                int index = 0;
+                foreach(int routeid in k.routes)
+                {
+                    line = "        Service " + routeid.ToString()+ "_Cycle_"+k.cycles[index];
+                    file.WriteLine(line);
+                    index++;
+                }
+            }
+            file.Close();
+        }
+
+        private void writestationsequence()
+        {
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\StationService.txt");
+            foreach (Station s in this.RAN.Stations)
+            {
+                string line;
+                line = "Station " + s.name + "_incoming trains";
+                file.WriteLine(line);
+                int index = 0;
+                foreach (int routeid in s.routes)
+                {
+                    line = "        Service " + this.RAN.linename[routeid-1] + "_Cycle_" + s.cycles[index];
+                    file.WriteLine(line);
+                    index++;
+                }
+            }
+            file.Close();
+        }
+
+        private void writeevents()
+        {
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\Events.txt");
+            foreach(EventNode en in this.RAN.eventlines)
+            {
+                string line;
+                    if (en.arrival == true)
+                    {
+                        line ="Route_"+en.lineno+ "_cycle_"+en.cycleNo.ToString()+" Arrival at "+this.RAN.Stations[en.stationid-1].name+" at time "+en.st.ToString();
+                    }
+                    else
+                    {
+                        line = "Route_" + en.lineno + "_cycle_" + en.cycleNo.ToString() + " Departure at " + this.RAN.Stations[en.stationid - 1].name + " at time " + en.st.ToString();
+                    }
+                    file.WriteLine(line);
+            }
+            file.Close();
+        }
+
         private void addLineToolStripMenuItem_Click(object sender, EventArgs e)
         {
 
@@ -778,6 +1142,11 @@ namespace RADFE
             this.conn.Close();
         }
 
+        /// <summary>
+        /// interactive algorithm
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void calToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ClearPreviousResults();
@@ -803,23 +1172,14 @@ namespace RADFE
                         {
                             if (this.RAN.eventlines[j].sectionid == se.sectionid)
                             {
-                                if (this.RAN.eventlines[j].lineno == 4 && this.RAN.eventlines[j].sectionid == 74)
-                                {
-                                    int tony = 0;
-                                }
-
                                 H.Add(j);
                                 templist.Add(j);
-                                //J related arrival constraint has to be changed
                                 
                                 break;
                             }
                         }
-                        //test whether they are in the same section
-                        
                     }
                 }
-
 
                 foreach (int j in K)
                 {
@@ -835,8 +1195,6 @@ namespace RADFE
                 K.Clear();
 
                 H.Sort();
-                
-                
 
                 foreach (int j in this.RAN.eventlines[H[0]].updependencyid)
                 {
@@ -1750,11 +2108,15 @@ namespace RADFE
                         
                         if (en.arrival == true)
                         {
-                            this.listView3.Items.Add("(" + en.cycleNo + ")" + "     Delay of Arrival Event of line " + en.lineno + " at station " + en.stationid + " is " + en.delay);
+                            this.listView3.Items.Add("(" + en.cycleNo + ")" 
+                                + "     Delay of Arrival Event of line " + this.RAN.linename[en.lineno-1]
+                                + " at station " + this.RAN.Stations[en.stationid-1].name + " is " + en.delay);
                         }
                         else
                         {
-                            this.listView3.Items.Add("(" + en.cycleNo + ")" + "     Delay of Departure Event of line " + en.lineno + " at station " + en.stationid + " is " + en.delay);
+                            this.listView3.Items.Add("(" + en.cycleNo + ")"
+                                + "     Delay of Departure Event of line " + this.RAN.linename[en.lineno - 1]
+                                + " at station " + this.RAN.Stations[en.stationid - 1].name + " is " + en.delay);
                         }
                     }
                 }
@@ -1891,11 +2253,11 @@ namespace RADFE
                 }
             }
 
-            Visualizer.copy_RAN = this.RAN;
-            RandColor();
-            Visualizer.Visualize(graph, "dependency");
-            Process photoViewer = new Process();
-            Process.Start(@"c:\\temp\\dependency.jpg");
+            //Visualizer.copy_RAN = this.RAN;
+            //RandColor();
+            //Visualizer.Visualize(graph, "dependency");
+            //Process photoViewer = new Process();
+            //Process.Start(@"c:\\temp\\dependency.jpg");
 
             FloydWarshallAllShortestPathAlgorithm<int, TaggedEdge<int, int>> alg = new FloydWarshallAllShortestPathAlgorithm<int, TaggedEdge<int, int>>(graph, EdgeWeights);
             alg.Compute();
@@ -1947,7 +2309,7 @@ namespace RADFE
                 }
             }
 
-            Visualizer.Visualize(sp_graph, "global");
+            //Visualizer.Visualize(sp_graph, "global");
            // Process.Start(@"c:\\temp\\global.jpg");
         }
 
@@ -2230,8 +2592,495 @@ namespace RADFE
             sw3.Close();
             sw4.Close();
         }
+
+        private void simulationToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Simulate();
+        }
+
+        /// <summary>
+        /// simulate the movement of the vehicle
+        /// </summary>
+        private void Simulate()
+        {
+            Intial(check);
+
+            bool finished = false;
+            double resolution = 1;// (seconds)
+            DateTime simutime = this.RefTime;
+
+            while(finished == false)
+            {
+                //update position
+                foreach (Train train in this.Trains)
+                {
+                    updateposition(train,resolution,simutime);
+                }
+                //update speed
+
+                simutime = simutime.AddSeconds(1);
+                finished = testFinish(this.Trains);
+            }
+
+            WriteSimuResult();
+        }
+        /// <summary>
+        /// write the simulation results
+        /// </summary>
+        private void WriteSimuResult()
+        {
+            SimuResult form = new SimuResult();
+
+            foreach (Train train in this.Trains)
+            {
+                int index = 0;
+                foreach (EventNode en in train.schedule)
+                {
+                    form.AddEvent(en, train.act_times[index], this.RAN);
+                    index++;
+                }
+            }
+
+            //write results by eventlines
+            WriteResultEvents();
+
+            form.ShowDialog();
+        }
+
+        private void WriteResultEvents()
+        {
+            System.IO.StreamWriter file = new System.IO.StreamWriter(@"C:\Users\Dali\Desktop\ResultByEvent.txt");
+            foreach(EventNode en in this.RAN.eventlines)
+            {
+                //find the corresponding event in train
+                EventNode en2 = FindTrainEvent(en);
+                string line1;
+                string line2;
+                if(en2.arrival == true)
+                {
+                    line1=RAN.linename[en.lineno-1]+" Arrival at "+this.RAN.Stations[en2.stationid-1].name;
+                    line2 = "           Schedule time: "+en.st.ToString()+"  ||  "+ "Actual time: "+en2.st.ToString()+"  ||  "+
+                        "Delay: "+en2.delay.ToString();
+                }
+                else
+                {
+                    line1 = RAN.linename[en.lineno - 1] + " Departure at " + this.RAN.Stations[en2.stationid - 1].name;
+                    line2 = "           Schedule time: " + en.st.ToString() + "  ||  " + "Actual time: " + en2.st.ToString() + "  ||  " +
+                        "Delay: " + en2.delay.ToString();
+                }
+                file.WriteLine(line1);
+                file.WriteLine(line2);
+            }
+            file.Close();
+        }
+
+        private EventNode FindTrainEvent(EventNode en)
+        {
+            foreach (Train train in this.Trains)
+            {
+                if (train.routeid == en.lineno)
+                {
+                    if (en.cycleNo == train.cycle)
+                    {
+                        foreach(EventNode en2 in train.act_times)
+                        {
+                            if(en2.stationid == en.stationid && en2.arrival ==en.arrival)
+                                return en2;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// update position with events
+        /// </summary>
+        /// <param name="train"></param>
+        /// <param name="resolution"></param>
+        /// <param name="simutime"></param>
+        private void updateposition(Train train, double resolution,DateTime simutime)
+        {
+            //on the link
+            if (train.arrived == true)
+                return;
+            if(train.onlink > 0)
+            {                
+                //resolution is in second
+                train.location = train.speed * resolution/3600+train.location;
+                //arrive at the "to" station
+                if(train.location>=train.route[train.station_passed].length)
+                {
+                    //check whether or not the platform is available
+                    //available
+                    //arrive at the station has to follow the specific order
+                    if(this.RAN.Stations[train.tostation-1].instation_train == null
+                        && train.routeid == this.RAN.Stations[train.tostation-1].routes[this.RAN.Stations[train.tostation-1].nextroute] //make sure the sequence of arrivals correct
+                        && train.cycle == this.RAN.Stations[train.tostation-1].cycles[this.RAN.Stations[train.tostation-1].cycle]) // make sure the cycle also true
+                    {
+                        if (simutime >= train.route[train.station_passed].at && //only arrive after schedule time
+                            simutime >= this.RAN.Stations[train.tostation - 1].earliest_arrive) //only arrive after the platform is clear
+                        {
+                            //update the actual times of arrivals
+                            TimeSpan tempsp = new TimeSpan();
+                            tempsp = simutime - this.RefTime;
+                            int index = train.station_passed*2 + 1;
+                            train.act_times[index].relativetime = (int)tempsp.TotalMinutes;
+                            train.act_times[index].delay = train.act_times[index].relativetime-train.schedule[index].relativetime;
+                            train.act_times[index].st = simutime;
+
+                            train.onstation = train.tostation;
+                            train.onlink = -1;
+                            train.station_passed = train.station_passed + 1;
+                            train.location = 0;
+                            this.RAN.Stations[train.tostation-1].instation_train = train;
+                            //the earliest release time of the train
+                            this.RAN.Stations[train.tostation - 1].earliest_relase = simutime.AddMinutes(Dwell);
+                            train.speed = 0;
+                            //set the indicators for the next arrival
+                            this.RAN.Stations[train.tostation - 1].nextroute++;
+                            this.RAN.Stations[train.tostation - 1].cycle++;
+
+                            //if the train is on station, then set the earliest arrival time of the next train
+                            if (train.onstation == train.destination)
+                            {
+                                //arrival constraint
+                                this.RAN.Stations[train.tostation - 1].earliest_arrive = simutime.AddMinutes(AAheadway);
+                                this.RAN.Stations[train.tostation - 1].instation_train = null;
+                                train.arrived = true;
+                            }
+                        }
+                        else
+                        {
+                            //arrived earlier than schedule time
+                            //then wait
+                            train.waiting = true;
+                            train.speed = 0;
+                        }
+                    }
+                    //unavailable
+                    else
+                    {                        
+                        train.waiting = true;
+                        train.speed = 0;
+                    }
+                }
+                //train is still going
+                else
+                {
+                    double reduced_speed=0;
+                    int linkindex=System.Convert.ToInt32(this.RAN.hashtable_link[train.onlink]);
+                    foreach (Hazard hazard in this.RAN.Links[linkindex].Link_hazards)
+                    {
+                        if(hazard.startime <= simutime && hazard.endtime>=simutime)
+                        {
+                            reduced_speed = ReduceSpeed(hazard.intensity);
+                            goto
+                                affected;                            
+                        }
+                    }
+                    goto
+                        unaffected;
+                affected:
+                    train.speed = reduced_speed; //update the speed
+                    return;
+                unaffected:
+                    {
+                        //check whether the train has already compensated the delay
+                        double normal_speed = (double)train.route[train.station_passed].length
+                                / ((double)train.route[train.station_passed].travetime / 60);
+                        if (checkdelay(train,normal_speed,train.location,simutime) == true)//still delayed
+                        {
+                            train.speed = train.route[train.station_passed].speedlimit;
+                        }
+                        else
+                        {
+                            train.speed = normal_speed;
+                        }
+                    }
+                }
+            }
+            //train is in station
+            else
+            {
+                //link id in the link list
+                int outbound_link_id = (int)this.RAN.hashtable_link[train.route[train.station_passed].linkid];
+                
+                //whether the time has passed the departure time
+                if (simutime >= this.RAN.Stations[train.onstation-1].earliest_relase // (dwell time) larger than the release time
+                    && simutime >= train.route[train.station_passed].dt //larger than the schedule time
+                    && simutime >= this.RAN.Links[outbound_link_id].earliest_departure   // departure/departure headway
+                    && train.routeid == this.RAN.Links[outbound_link_id].routes[this.RAN.Links[outbound_link_id].nextroute]
+                    && train.cycle == this.RAN.Links[outbound_link_id].cycles[this.RAN.Links[outbound_link_id].cycle]) // (DD time) 
+                {
+                    //update the actual times of departures
+                    TimeSpan tempsp = new TimeSpan();
+                    tempsp = simutime - this.RefTime;
+                    int index = train.station_passed * 2 ;
+                    train.act_times[index].relativetime = (int)tempsp.TotalMinutes;
+                    train.act_times[index].delay = train.act_times[index].relativetime - train.schedule[index].relativetime;
+                    
+                    train.onlink = train.route[train.station_passed].linkid;
+                    train.tostation = train.route[train.station_passed].tono;
+                    train.fromstation = train.onstation;
+                    
+                    //speed is in km per hour
+                    //length is in km
+                    //travel time is in minutes (this is the original speed)
+                    train.speed = (double)train.route[train.station_passed].length
+                        / ((double)train.route[train.station_passed].travetime/60);
+                    //delay happened has to increase the speed) 
+                    train.speed = train.route[train.station_passed].speedlimit;
+                    // update the wait index 
+                    this.RAN.Stations[train.onstation - 1].wait_index
+                        = Math.Max(0,this.RAN.Stations[train.onstation - 1].wait_index - 1);
+                    // set the earliest arrive time using the arrival departure headway
+                    this.RAN.Stations[train.onstation - 1].earliest_arrive
+                        = simutime.AddMinutes(this.ADheadway);
+                    // set the earliest train using the same outbound link                  
+                    this.RAN.Links[outbound_link_id].earliest_departure
+                        = simutime.AddMinutes(this.DDheadway);
+                    this.RAN.Stations[train.onstation - 1].instation_train = null;
+                                        
+                    this.RAN.Links[outbound_link_id].nextroute++;
+                    this.RAN.Links[outbound_link_id].cycle++;
+
+                    train.onstation = -1;
+                }
+                else //unable to depart
+                {
+                    //do nothing
+                }
+            }
+        }
+
+        //check whether the speed of the train
+        //return true, full speed
+        // return false, normal speed
+        private bool checkdelay(Train train,double normalspeed,double length,DateTime dt)
+        {
+            //check the scheduled time (in minutes)
+            double schedule = train.schedule[train.station_passed * 2].relativetime+length/normalspeed*60;
+            //CURRENT TIme
+            TimeSpan actual = new TimeSpan();
+            actual = dt - this.RefTime;
+
+            if (schedule - actual.TotalMinutes < 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// update the position w/o events
+        /// </summary>
+        /// <param name="train"></param>
+        /// <param name="resolution"></param>
+        /// <param name="simutime"></param>
+        private void updatepositionwoevent(Train train, double resolution, DateTime simutime)
+        {
+            //on the link
+            if (train.arrived == true)
+                return;
+            if (train.onlink > 0)
+            {
+                //resolution is in second
+                train.location = train.speed * resolution / 3600 + train.location;
+                //arrive at the "to" station
+                if (train.location >= train.route[train.station_passed].length)
+                {
+                    //check whether or not the platform is available
+                    //available
+                    if (this.RAN.Stations[train.tostation - 1].instation_train == null)
+                    {
+                        if (simutime >= train.route[train.station_passed].at && //only arrive after schedule time
+                            simutime >= this.RAN.Stations[train.tostation - 1].earliest_arrive) //only arrive after the platform is clear
+                        {
+                            train.onstation = train.tostation;
+                            train.onlink = -1;
+                            train.station_passed = train.station_passed + 1;
+                            train.location = 0;
+                            this.RAN.Stations[train.tostation - 1].instation_train = train;
+                            //the earliest release time of the train
+                            this.RAN.Stations[train.tostation - 1].earliest_relase = simutime.AddMinutes(Dwell);
+                            train.speed = 0;
+
+                            //update the actual times of arrivals
+                            TimeSpan tempsp = new TimeSpan();
+                            tempsp = simutime - this.RefTime;
+                            train.act_times[train.station_passed].relativetime = (int)tempsp.TotalMinutes;
+                        }
+                        else
+                        {
+                            //arrived earlier than schedule time
+                            //then wait
+                            train.onstation = train.tostation;
+                            train.onlink = -1;
+                            train.station_passed = train.station_passed + 1;
+                            train.location = 0;
+                            this.RAN.Stations[train.tostation - 1].instation_train = train;
+                            //the earliest release time of the train
+                            this.RAN.Stations[train.tostation - 1].earliest_relase =
+                                simutime.AddMinutes(Dwell);
+                            train.speed = 0;
+                        }
+                    }
+                    //unavailable
+                    else
+                    {
+                        train.onstation = train.tostation;
+                        train.onlink = -1;
+                        train.station_passed = train.station_passed + 1;
+                        train.location = 0;
+                        train.waiting = true;
+
+                        train.speed = 0;
+                    }
+                }
+                //train is still going
+                else
+                {                    
+                    train.speed = (double)train.route[train.station_passed].length
+                            / ((double)train.route[train.station_passed].travetime / 60);
+                }
+            }
+            //train is in station
+            else
+            {
+                //link id in the link list
+                int outbound_link_id = (int)this.RAN.hashtable_link[train.route[train.station_passed].linkid];
+
+                //whether the time has passed the departure time
+                if (simutime >= this.RAN.Stations[train.onstation - 1].earliest_relase // (dwell time) larger than the release time
+                    && simutime >= train.route[train.station_passed].dt //larger than the schedule time
+                    && simutime >= this.RAN.Links[outbound_link_id].earliest_departure) // (DD time) 
+                {
+                    train.onlink = train.route[train.station_passed].linkid;
+                    train.tostation = train.route[train.station_passed].tono;
+                    train.fromstation = train.onstation;
+
+                    //speed is in km per hour
+                    //length is in km
+                    //travel time is in minutes
+                    train.speed = (double)train.route[train.station_passed].length
+                        / ((double)train.route[train.station_passed].travetime / 60);
+                    // update the wait index 
+                    this.RAN.Stations[train.onstation - 1].wait_index
+                        = Math.Max(0, this.RAN.Stations[train.onstation - 1].wait_index - 1);
+                    // set the earliest arrive time using the arrival departure headway
+                    this.RAN.Stations[train.onstation - 1].earliest_arrive
+                        = simutime.AddMinutes(this.ADheadway);
+                    // set the earliest train using the same outbound link                  
+                    this.RAN.Links[outbound_link_id].earliest_departure
+                        = simutime.AddMinutes(this.DDheadway);
+
+                    train.onstation = -1;
+                    //update the actual times of departures
+                    TimeSpan tempsp = new TimeSpan();
+                    tempsp = simutime - this.RefTime;
+                    train.act_times[train.station_passed].relativetime = (int)tempsp.TotalMinutes;
+                }
+                else //unable to depart
+                {
+                    //do nothing
+                }
+            }
+        }
+
+        //according to the intensity of the hazard, determine the reduced traveling speed
+        //unit: km/h
+        private double ReduceSpeed(int p)
+        {
+            //lowest level
+            return 60 - p * 10; 
+        }
+
+        private bool testFinish(List<Train> list)
+        {
+            List<int> index = new List<int>() ;
+            int indexer = 0;
+            foreach (Train train in list)
+            {
+                if (train.destination == train.onstation)
+                {
+                    index.Add(indexer);
+                }
+                indexer++;
+            }
+            if (index.Count == list.Count)
+            {
+                return true;
+            }
+            else
+            {
+                foreach (int i in index)
+                {
+                    list[i].arrived = true;
+                }
+                return false;
+            }
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            SimulateNoEvent();
+        }
+
+        private void SimulateNoEvent()
+        {
+            Intial(check);
+            //clear events
+            foreach(Link lk in this.RAN.Links)
+            {
+                lk.Link_hazards.Clear();
+            }
+
+            bool finished = false;
+            double resolution = 1;// (seconds)
+            DateTime simutime = this.RefTime;
+
+            while (finished == false)
+            {
+                //update position
+                foreach (Train train in this.Trains)
+                {
+                    this.updateposition(train, resolution, simutime);
+                }
+                //update speed
+
+                simutime = simutime.AddSeconds(1);
+                finished = testFinish(this.Trains);
+            }
+
+            WriteSimuResult();
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            this.Simulate();
+        }
+                
+        public List<EventNode> DeepCopy(List<EventNode> input)
+        {
+            MemoryStream ms = new MemoryStream();
+            BinaryFormatter bf = new BinaryFormatter();
+            bf.Serialize(ms, input);
+            ms.Position = 0;
+            return (List<EventNode>)bf.Deserialize(ms);
+        }
+
+        public List<LineNode> DeepCopy(List<LineNode> input)
+        {
+            MemoryStream ms = new MemoryStream();
+            BinaryFormatter bf = new BinaryFormatter();
+            bf.Serialize(ms, input);
+            ms.Position = 0;
+            return (List<LineNode>)bf.Deserialize(ms);
+        }
     }
 
+    [Serializable]
     public class LineNode
     {
         public int lineid;
@@ -2243,6 +3092,8 @@ namespace RADFE
         public int travetime;
         public int sectionno;
         public int length;
+
+        public int linkid { get; set; }
     }
 
     public class interval
@@ -2267,6 +3118,7 @@ namespace RADFE
         public List<int> stageno = new List<int>();
     }
 
+    [Serializable]
     public class EventNode
     {
         public bool arrival = false;
@@ -2300,6 +3152,8 @@ namespace RADFE
         public int aevent;
         private EventNode eventNode;
 
+        public int periodicity = 24;
+
         public EventNode(EventNode eventNode)
         {
             // TODO: Complete member initialization
@@ -2320,6 +3174,7 @@ namespace RADFE
             // TODO: Complete member initialization
             
         }
+
     }
 
     public class RAnetwork
@@ -2333,6 +3188,9 @@ namespace RADFE
         //weight of link in the dependence graph
         public List<int> Weights = new List<int>();
         public Hashtable hashtable = new Hashtable();
+        public Hashtable hashtable_link = new Hashtable();
+        public List<Link> Links = new List<Link>();
+        public List<Station> Stations = new List<Station>();
     }
 
     public class spnode
