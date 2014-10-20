@@ -57,7 +57,6 @@ namespace RADFE
             {
                 return;
             }
-            
         }
 
         private void Intial(int check)
@@ -93,10 +92,10 @@ namespace RADFE
         {
             if (check == 1)
             {
-                this.AAheadway = 30;
-                this.DDheadway = 10;
+                this.AAheadway = 15;
+                this.DDheadway = 15;
                 this.Dwell = 2;
-                this.ADheadway = 10;
+                this.ADheadway = 15;
             }
 
             else
@@ -933,6 +932,8 @@ namespace RADFE
                         //arrival/departure headway
                         if (compareitem.departure == true && compareitem.stationid == temp.stationid && compareitem.lineno != temp.lineno)
                         {
+                            if (temp.lineno == 3 && compareitem.lineno == 2)
+                                temp.lineno = temp.lineno;
                             if(temp.dependencyid.Count==0)
                             {
                                 temp.dependencyid.Add(j);
@@ -942,6 +943,7 @@ namespace RADFE
                             }
                             else
                             {
+                                bool found_dept = false;
                                 for(int k=0; k<temp.dependencyid.Count();k++)
                                 {
                                     if (this.RAN.eventlines[temp.dependencyid[k]].departure == true)
@@ -951,10 +953,17 @@ namespace RADFE
                                         st = temp.relativetime - compareitem.relativetime;
                                         buff = st - ADheadway;
                                         temp.dependentweight[k]=buff;
-
+                                        found_dept = true;
                                         break;
                                     }
                                 }
+                                if (found_dept == false)
+                                {
+                                    temp.dependencyid.Add(j);
+                                    st = temp.relativetime - compareitem.relativetime;
+                                    buff = st - ADheadway;
+                                    temp.dependentweight.Add(buff);
+                                }                                    
                             }
                         }
                         //arrival headway
@@ -965,77 +974,57 @@ namespace RADFE
                                 temp.dependencyid.Add(j);
                                 st = temp.relativetime - compareitem.relativetime;
                                 buff = st - AAheadway;
-                                if (buff < 0)
-                                {
-                                    int tony = 0;
-                                }
                                 temp.dependentweight.Add(buff);
                             }
                             else
                             {
+                                bool found_arrival = false;
                                 for (int k=0; k<temp.dependencyid.Count();k++)
                                 {
                                     if (this.RAN.eventlines[temp.dependencyid[k]].arrival == true)
                                     {
                                         temp.dependencyid[k]=j;
                                         st = temp.relativetime - compareitem.relativetime;
-                                        buff = st - AAheadway;
-                                        if (buff < 0)
-                                        {
-                                            int tony = 0;
-                                        }
+                                        buff = st - AAheadway;                                        
                                         temp.dependentweight[k]=buff;
+                                        found_arrival = true;
                                         break;
                                     }
+                                }
+                                if (found_arrival == false)
+                                {
+                                    temp.dependencyid.Add(j);
+                                    st = temp.relativetime - compareitem.relativetime;
+                                    buff = st - AAheadway;
+                                    temp.dependentweight.Add(buff);
                                 }
                             }
                         }
                     }
-
+                    //if this is a departure event
                     if (temp.departure == true)
                     {
-
-                        if (temp.lineno == 3 && temp.stationid==3)
-                        {
-                            int tony = 0;
-                        }
-
-                        //dewell constraint
+                        //dwell constraint
                         if (compareitem.arrival == true && compareitem.lineno == temp.lineno && compareitem.stationid == temp.stationid)
                         {                            
                             temp.selfdependencyid.Add(j);
                             st = temp.relativetime - compareitem.relativetime;
                             buff = st - Dwell;
-                            //let dwell constraint equals to zero
-                            //buff = 0;
-                            if (buff < 0)
-                            {
-                                buff = buff;
-                            }
                             temp.selfweight.Add(buff);
                         }
-                        //departure headway
-                        
+                        //departure headway                        
                         if (compareitem.departure == true && compareitem.sectionid == temp.sectionid && compareitem.lineno != temp.lineno)
                         {
-                            if (temp.lineno == 8)
-                            {
-                                int tony = 0;
-                            }
-
                             if (temp.dependencyid.Count == 0)
                             {
                                 temp.dependencyid.Add(j);
                                 st = temp.relativetime - compareitem.relativetime;
                                 buff = st - DDheadway;
-                                if (buff < 0)
-                                {
-                                    int tony = 0;
-                                }
                                 temp.dependentweight.Add(buff);
                             }
                             else
                             {
+                                bool found_dept2 = false;
                                 for (int k = 0; k < temp.dependencyid.Count(); k++)
                                 {
                                     if (this.RAN.eventlines[temp.dependencyid[k]].departure == true)
@@ -1043,13 +1032,17 @@ namespace RADFE
                                         temp.dependencyid[k] = j;
                                         st = temp.relativetime - compareitem.relativetime;
                                         buff = st - DDheadway;
-                                        if (buff < 0)
-                                        {
-                                            int tony = 0;
-                                        }
                                         temp.dependentweight[k]=buff;
+                                        found_dept2 = true;
                                         break;
                                     }
+                                }
+                                if (found_dept2 == false)
+                                {
+                                    temp.dependencyid.Add(j);
+                                    st = temp.relativetime - compareitem.relativetime;
+                                    buff = st - DDheadway;
+                                    temp.dependentweight.Add(buff);
                                 }
                             }
                         }
@@ -1165,9 +1158,11 @@ namespace RADFE
                 templist.Clear();
                 for (int j = 0; j < this.RAN.eventlines.Count; j++)
                 {
+                    //if the event happens before the stage i begins
                     if (this.RAN.eventlines[j].departure == true                         
                         && this.RAN.eventlines[j].realretime < this.RAN.events.intervals[i].relativeet)
                     {
+                        //if this event is within the range of the hazard, put it into H and templist
                         foreach(Section se in this.RAN.events.sections[i])
                         {
                             if (this.RAN.eventlines[j].sectionid == se.sectionid)
@@ -1181,12 +1176,13 @@ namespace RADFE
                     }
                 }
 
+                //combine K and H
                 foreach (int j in K)
                 {
                     if (H.IndexOf(j) < 0)
                         H.Add(j);
                 }
-
+                
                 if (H.Count <= 0)
                 {
                     break;
@@ -1196,23 +1192,22 @@ namespace RADFE
 
                 H.Sort();
 
+                //find the events that H relies on
                 foreach (int j in this.RAN.eventlines[H[0]].updependencyid)
                 {
                     if(H.IndexOf(j)<0)
                     H.Add(j);
                 }
-
+                //find the events that H relies on
                 foreach (int j in this.RAN.eventlines[H[0]].upselfdependencyid)
                 {
                     if (H.IndexOf(j) < 0)
                     H.Add(j);
                 }
 
-                H.RemoveAt(0);
+                H.RemoveAt(0); // ?
                 H.Sort();
-
                 
-
                 while (H.Count > 0)
                 {
                     EventNode temp = this.RAN.eventlines[H[0]];
@@ -1228,57 +1223,35 @@ namespace RADFE
                             foreach(Section se in this.RAN.events.sections[i])
                             {
                                 if (temp.sectionid == se.sectionid )
-                                {
-                                    if (temp.lineno == 4 && temp.sectionid == 74)
-                                    {
-                                        int tony = 0;
-                                    }
-                                    //bool succ = false;
-                                    //foreach (int index in templist)
-                                    //{
-                                    //    if (this.RAN.eventlines[index].lineno == temp.lineno && temp.sectionid == this.RAN.eventlines[index].sectionid)
-                                    //        succ = true;
-                                    //}
-                                    //if (succ == true)
-                                    //{                                    
-
-                                        delay = CalSgDelay(dep(temp), temp, this.RAN.events.intervals[i]); 
-                                    //delay=200;                                
-                                        break;
-                                       //}
+                                {          
+                                    delay = CalSgDelay(dep(temp), temp, this.RAN.events.intervals[i],
+                                        this.RAN.events.sections[i][0].intensity); 
+                                    break;
                                 }
                             }
                             int rela=0;
                             if (delay == 0)
                             {
-                                temp.delay = System.Math.Max(temp.delay, this.RAN.eventlines[temp.selfdependencyid[k]].delay - temp.selfweight[k]);
+                                //for safety
+                                temp.delay = 
+                                    System.Math.Max(temp.delay, this.RAN.eventlines[temp.selfdependencyid[k]].delay - temp.selfweight[k]);
                                 temp.realretime = temp.relativetime + temp.delay;
                             }
                             else
                             {
-                                temp.delay = System.Math.Max(temp.delay, this.RAN.eventlines[temp.selfdependencyid[k]].delay + delay);
+                                //for safety
+                                temp.delay = System.Math.Max(delay, 0);//?
                                 temp.realretime = temp.relativetime + temp.delay;
-
                                 if (temp.lineno == 4 && temp.sectionid == 74)
                                 {
                                     int tony = 0;
                                 }
-                            }
-
-                            if (temp.delay < 0)
-                            {
-                                
                             }
                         }
                         else
                         {                 
                             temp.delay = System.Math.Max(this.RAN.eventlines[temp.selfdependencyid[k]].delay-temp.selfweight[k],0);
                             temp.realretime = temp.relativetime+temp.delay;
-
-                            if (temp.delay < 0)
-                            {
-                                int tony = 0;
-                            }
                         }
                     }
                     for (int k = 0; k < temp.dependencyid.Count; k++)
@@ -1295,7 +1268,6 @@ namespace RADFE
                         }
                         foreach (int k in temp.upselfdependencyid)
                         {
-                            
                             if (H.IndexOf(k) < 0)
                             H.Add(k);
                         }
@@ -1314,7 +1286,6 @@ namespace RADFE
 
             if (lastindex < this.RAN.eventlines.Count)
             {
-
                 //method 1
                 if (K.Count > 0)
                 {
@@ -1574,11 +1545,7 @@ namespace RADFE
                         continue;
                     }
 
-                    if (ar.lineno == 1 && ar.stationid == 7)
-                    {
-                        int tony = 0;
-                    }
-                    int delay = CalSgDelay(tempevent,ar,it);
+                    int delay = CalSgDelay(tempevent,ar,it, RAN.events.sections[i-1][0].intensity);
                     ar.delay = System.Math.Max(ar.delay,delay);                    
 
                     ar.realretime = ar.relativetime + ar.delay;
@@ -1664,125 +1631,145 @@ namespace RADFE
             
         }
 
-        private int CalSgDelay(EventNode departure, EventNode arrival, interval it)
+        private int CalSgDelay(EventNode departure, EventNode arrival, interval it,int intensity)
         {
+            if (departure.lineno == 2 && departure.sectionid == 25)
+                departure.lineno = departure.lineno;
             int delay=0;
             departure.length = arrival.length;
-            double speedlimit=30f/60f;
-            double speedlimith = 100f/60f;
-            int temptime = (int)((double)departure.length / speedlimit);
-            int arrivaltime = departure.realretime-departure.relativetime+arrival.relativetime;
-            //depature的时间在事件开始之后
+            double traveltime = (double)(arrival.relativetime-departure.relativetime);
+            //speed limit is the reduce speed
+            double speedlimit=this.ReduceSpeed(intensity);
+            //the maximum speed in normal conditions
+            double speedlimith = 100f;
+            //the normal speed
+            double speednormal = (double)arrival.length / (traveltime/60f);
+            //temp-time is the journey time if the traveling period is covered by the hazard
+            int time_under_hazard = (int)((double)departure.length / speedlimit*60);
+            //d_j is the delay of the departure 
+            double d_j = departure.realretime-departure.relativetime;
+            //the time of departure is after the hazardous event
+            double d_i = (double)System.Math.Max(
+                (int)(d_j - ((double)departure.length / (double)speednormal * 60f - (double)departure.length / (double)speedlimith * 60f)),
+                0);
+            //arrival time considering the delay of the departure
+            int arrivaltime = arrival.relativetime + System.Convert.ToInt32(d_i);
+            //the expected travel time without considering the hazard
+            double eta_i = 0;
+            if (d_i== 0)
+            {
+                eta_i = (double)(departure.length) / (double)speednormal*60 - d_j;
+            }
+            else
+            {
+                eta_i = (double)departure.length / (double)speedlimith * 60 ;
+            }
+            //departure happens after the hazard ends
             if (departure.realretime >= it.relativeet)
             {
                 return 0;
             }
-            if (arrival.realretime <= it.relativest)
+            //arrive  before the hazard ends
+            if (arrivaltime <= it.relativest)
             {
                 return 0;
             }
-
+            //scenario 1
+            //the departure happens after the event begins
             if (departure.realretime >= it.relativest)
             {
-                //全程都收到event的影响
-                if (arrivaltime <= it.relativeet)
-                {
+                //minute
+                //to see whether or not the hazard ends before the train arrives
+                //scenario 1.1
+               // the arrival happens first and then the hazard ends
+                if (departure.realretime + time_under_hazard <= it.relativeet)
+                {  
                     //the entire journey will be affected
-                    
-                    delay = temptime-arrivaltime + departure.realretime ;
-                    if (delay < 0)
+                    //the first part is the realized departure time; the second is the scheduled time
+                    //this value will surely be larger than zero
+                    delay = Math.Max((time_under_hazard + departure.realretime) - arrival.relativetime, 0);
+                    if (delay == 0)
                     {
-                        //MessageBox.Show("delay line 1240");
-                        delay = 0;
+                        MessageBox.Show
+                            ("something is wrong. The delay under the influence of the hazard for the whole journey will surely be larger than zero.");
                     }
                 }
+                //scenario 1.2
+                //the hazard ends first and then the train needs to run in full speed for the remaining segment
                 else
-                {
-                    
-                    //延误后全程收到evnet的影响
-                    if (temptime + departure.realretime <= it.relativeet)
-                    {
-                        delay = temptime - arrivaltime + departure.realretime;
-                        if (delay < 0)
-                        {
-                            //MessageBox.Show("delay line 1240");
-                            delay = 0;
-                        }
-                    }
-                    //部分收到Event的影响;后程全速前进
-                    else
-                    {
-                        //影响下的距离
-                        int templenght = (int)((double)(it.relativeet - departure.realretime) * speedlimit);
-                        //追赶的时间
-                        int time2 = (int)((double)(departure.length - templenght) / speedlimith);
-                        //总时间
-                        int total = time2 + it.relativeet - departure.realretime;
-                        //延误
-                        delay = total - (arrivaltime - departure.realretime);
-
-                        if (delay < 0)
-                        {
-                            //MessageBox.Show("delay line 1240");
-                            delay = 0;
-                        }
-                    }
+                {  
+                    //半程收到影响
+                    //影响下的距离
+                    double templenght =((double)(it.relativeet - departure.realretime) /60f* speedlimit);
+                    //追赶的时间
+                    double time2 = ((double)(departure.length - templenght) / speedlimith*60f);
+                    //总时间
+                    double total = time2 + it.relativeet;
+                    //延误
+                    //delay = System.Convert.ToInt32(total - (arrivaltime - departure.realretime)); //?
+                    delay = System.Math.Max(0,(int)total - arrival.relativetime);
                 }
             }
+            //scenario 2
+            //the departure happens before the hazard begins
             else
             {
+                double epsilon=0;
+                //the time between the departure and the beginning of the hazard
+                double delta_time = it.relativest - departure.realretime;
+                //Departure happens before the hazards begins
+                //the train will travel maximum speed due to the delay of event j for part of or the entire journey
+                //the length traveled before the event starts is denoted by epsilon
+                if(d_i>0)
+                {
+                    epsilon = speedlimith * delta_time / 60f ;              
+                }
+                else
+                {                    
+                    double delta_speed = speedlimith - speednormal;
+                    epsilon = speedlimith * Math.Min(delta_time / 60f, speednormal * d_j / 60f / delta_speed) +
+                        speednormal * Math.Max(0, delta_time / 60f - speednormal * d_j / 60f / delta_speed);    
+                }
                 //事件开始的半段
                 double portion = ((double)(it.relativest-departure.realretime))/((double)(arrivaltime - departure.realretime));
                 //剩下的距离
                 double templength = (double)departure.length * (1-portion);
+                templength = departure.length-epsilon;
                 //剩下的距离全程受影响
-                if (arrivaltime <= it.relativeet)
+                //scenario 2.1
+                if (epsilon+speedlimit*it.last >= departure.length) //the length totally covered is larger than the link length
                 {
-                    int timeafter = (int)(templength / speedlimit);
-                    int total = timeafter+it.relativest-departure.realretime;
+                    int timeafter = (int)(templength / speedlimit*60f);
+                    int total = timeafter+it.relativest;
                     //延误
-                    delay = total - (arrivaltime - departure.realretime);
+                    delay = total - (arrivaltime - departure.realretime);//?
+                    delay = total-arrival.relativetime;
                     if (delay < 0)
                     {
                         //MessageBox.Show("delay line 1240");
                         delay = 0;
                     }
                 }
+                //scenario 2.2
                 else
                 {
-                    int timeafter =(int)(templength/speedlimit);
-                    if (timeafter + it.relativest <= it.relativeet)
+                    //剩下的路程也仅仅是半程收影响              
+                    //影响下的距离
+                    double templenght2 = ((double)(it.relativeet - it.relativest) )* speedlimit;
+                    //追赶的时间
+                    int time2 = (int)((templength - templenght2) / speedlimith);
+                    //总时间
+                    int total = time2 + it.relativeet -it.relativest+departure.realretime;
+                    //延误
+                    delay = total - (arrivaltime - departure.realretime);
+                    delay = total - arrival.relativetime;
+                    if (delay < 0)
                     {
-                        //全程受影响
-                        int total = timeafter + it.relativest - departure.realretime;
-                        //延误
-                        delay = total - (arrivaltime - departure.realretime);
-                        if (delay < 0)
-                        {
-                            //MessageBox.Show("delay line 1240");
-                            delay = 0;
-                        }
-                    }
-                    //部分收到Event的影响;后程全速前进
-                    else
-                    {
-                        //影响下的距离
-                        double templenght2 = ((double)(it.relativeet - it.relativest) )* speedlimit;
-                        //追赶的时间
-                        int time2 = (int)((templength - templenght2) / speedlimith);
-                        //总时间
-                        int total = time2 + it.relativeet -it.relativest+(departure.realretime-it.relativest);
-                        //延误
-                        delay = total - (arrivaltime - departure.realretime);
-                        if (delay < 0)
-                        {
-                            //MessageBox.Show("delay line 1240");
-                            delay = 0;
-                        }
+                        //MessageBox.Show("delay line 1240");
+                        delay = 0;
                     }
                 }
             }
-
             return delay;
         }
 
@@ -2658,13 +2645,15 @@ namespace RADFE
                 string line2;
                 if(en2.arrival == true)
                 {
-                    line1=RAN.linename[en.lineno-1]+" Arrival at "+this.RAN.Stations[en2.stationid-1].name;
+                    line1=RAN.linename[en.lineno-1]+" Arrival at "+this.RAN.Stations[en2.stationid-1].name + "_Cycle_"+en.cycleNo;
                     line2 = "           Schedule time: "+en.st.ToString()+"  ||  "+ "Actual time: "+en2.st.ToString()+"  ||  "+
                         "Delay: "+en2.delay.ToString();
+                    if (en2.primary == true) 
+                        line2 = line2 + " PRIMARY";
                 }
                 else
                 {
-                    line1 = RAN.linename[en.lineno - 1] + " Departure at " + this.RAN.Stations[en2.stationid - 1].name;
+                    line1 = RAN.linename[en.lineno - 1] + " Departure at " + this.RAN.Stations[en2.stationid - 1].name + "_Cycle_" + en.cycleNo;
                     line2 = "           Schedule time: " + en.st.ToString() + "  ||  " + "Actual time: " + en2.st.ToString() + "  ||  " +
                         "Delay: " + en2.delay.ToString();
                 }
@@ -2705,12 +2694,16 @@ namespace RADFE
             if (train.arrived == true)
                 return;
             if(train.onlink > 0)
-            {                
+            {
                 //resolution is in second
                 train.location = train.speed * resolution/3600+train.location;
                 //arrive at the "to" station
                 if(train.location>=train.route[train.station_passed].length)
                 {
+                    if (train.routeid == 2 && train.tostation == 5)
+                    {
+                        train.routeid = train.routeid;
+                    }
                     //check whether or not the platform is available
                     //available
                     //arrive at the station has to follow the specific order
@@ -2725,7 +2718,7 @@ namespace RADFE
                             TimeSpan tempsp = new TimeSpan();
                             tempsp = simutime - this.RefTime;
                             int index = train.station_passed*2 + 1;
-                            train.act_times[index].relativetime = (int)tempsp.TotalMinutes;
+                            train.act_times[index].relativetime = (int)tempsp.TotalMinutes;                            
                             train.act_times[index].delay = train.act_times[index].relativetime-train.schedule[index].relativetime;
                             train.act_times[index].st = simutime;
 
@@ -2735,7 +2728,10 @@ namespace RADFE
                             train.location = 0;
                             this.RAN.Stations[train.tostation-1].instation_train = train;
                             //the earliest release time of the train
-                            this.RAN.Stations[train.tostation - 1].earliest_relase = simutime.AddMinutes(Dwell);
+                            if (train.onstation != train.destination) //no need to add earliest release
+                            {
+                                this.RAN.Stations[train.tostation - 1].earliest_relase = simutime.AddMinutes(Dwell);
+                            }
                             train.speed = 0;
                             //set the indicators for the next arrival
                             this.RAN.Stations[train.tostation - 1].nextroute++;
@@ -2770,6 +2766,10 @@ namespace RADFE
                 {
                     double reduced_speed=0;
                     int linkindex=System.Convert.ToInt32(this.RAN.hashtable_link[train.onlink]);
+                    if (train.routeid == 2 && train.tostation == 5)
+                    {
+                        train.routeid = train.routeid;
+                    }
                     foreach (Hazard hazard in this.RAN.Links[linkindex].Link_hazards)
                     {
                         if(hazard.startime <= simutime && hazard.endtime>=simutime)
@@ -2782,8 +2782,11 @@ namespace RADFE
                     goto
                         unaffected;
                 affected:
-                    train.speed = reduced_speed; //update the speed
-                    return;
+                    {
+                        train.speed = reduced_speed; //update the speed
+                        train.act_times[train.station_passed * 2 + 1].primary = true;
+                        return;
+                    }
                 unaffected:
                     {
                         //check whether the train has already compensated the delay
@@ -2805,9 +2808,10 @@ namespace RADFE
             {
                 //link id in the link list
                 int outbound_link_id = (int)this.RAN.hashtable_link[train.route[train.station_passed].linkid];
-                
+                if (train.routeid == 4)
+                    train.routeid = train.routeid;
                 //whether the time has passed the departure time
-                if (simutime >= this.RAN.Stations[train.onstation-1].earliest_relase // (dwell time) larger than the release time
+                if ((simutime >= this.RAN.Stations[train.onstation-1].earliest_relase) // (dwell time) larger than the release time
                     && simutime >= train.route[train.station_passed].dt //larger than the schedule time
                     && simutime >= this.RAN.Links[outbound_link_id].earliest_departure   // departure/departure headway
                     && train.routeid == this.RAN.Links[outbound_link_id].routes[this.RAN.Links[outbound_link_id].nextroute]
@@ -2818,8 +2822,11 @@ namespace RADFE
                     tempsp = simutime - this.RefTime;
                     int index = train.station_passed * 2 ;
                     train.act_times[index].relativetime = (int)tempsp.TotalMinutes;
+                    if (train.routeid == 9 && this.RAN.Stations[train.onstation - 1].name == "tianjing")
+                        train.routeid = train.routeid;
                     train.act_times[index].delay = train.act_times[index].relativetime - train.schedule[index].relativetime;
-                    
+                    train.act_times[index].st = simutime;
+                                        
                     train.onlink = train.route[train.station_passed].linkid;
                     train.tostation = train.route[train.station_passed].tono;
                     train.fromstation = train.onstation;
@@ -2830,7 +2837,10 @@ namespace RADFE
                     train.speed = (double)train.route[train.station_passed].length
                         / ((double)train.route[train.station_passed].travetime/60);
                     //delay happened has to increase the speed) 
-                    train.speed = train.route[train.station_passed].speedlimit;
+                    if (train.act_times[index].delay>0)
+                    {
+                        train.speed =train.route[train.station_passed].speedlimit;
+                    }
                     // update the wait index 
                     this.RAN.Stations[train.onstation - 1].wait_index
                         = Math.Max(0,this.RAN.Stations[train.onstation - 1].wait_index - 1);
@@ -3153,6 +3163,7 @@ namespace RADFE
         private EventNode eventNode;
 
         public int periodicity = 24;
+        public bool primary = false;
 
         public EventNode(EventNode eventNode)
         {
