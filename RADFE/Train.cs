@@ -28,6 +28,7 @@ namespace RADFE
         public int wait_index;
 
         public bool arrived = false;
+        public int period;
 
         
     }

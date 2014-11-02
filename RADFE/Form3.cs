@@ -37,5 +37,13 @@ namespace RADFE
                 return 1;
             }
         }
+
+        internal bool getcheck()
+        {
+            if (this.checkBox_cycle.Checked == true)
+                return true;
+            else
+                return false;
+        }
     }
 }

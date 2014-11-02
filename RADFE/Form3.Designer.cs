@@ -31,6 +31,7 @@
             this.radioButtonMap1 = new System.Windows.Forms.RadioButton();
             this.radioButton2 = new System.Windows.Forms.RadioButton();
             this.button1 = new System.Windows.Forms.Button();
+            this.checkBox_cycle = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // radioButtonMap1
@@ -68,11 +69,22 @@
             this.button1.Text = "button1";
             this.button1.UseVisualStyleBackColor = true;
             // 
+            // checkBox_cycle
+            // 
+            this.checkBox_cycle.AutoSize = true;
+            this.checkBox_cycle.Location = new System.Drawing.Point(46, 135);
+            this.checkBox_cycle.Name = "checkBox_cycle";
+            this.checkBox_cycle.Size = new System.Drawing.Size(52, 17);
+            this.checkBox_cycle.TabIndex = 3;
+            this.checkBox_cycle.Text = "Cycle";
+            this.checkBox_cycle.UseVisualStyleBackColor = true;
+            // 
             // Form3
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(370, 164);
+            this.Controls.Add(this.checkBox_cycle);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.radioButton2);
             this.Controls.Add(this.radioButtonMap1);
@@ -89,5 +101,6 @@
         private System.Windows.Forms.RadioButton radioButtonMap1;
         private System.Windows.Forms.RadioButton radioButton2;
         private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.CheckBox checkBox_cycle;
     }
 }
